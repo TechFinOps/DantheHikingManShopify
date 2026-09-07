@@ -1,150 +1,168 @@
-import {Await, useLoaderData, Link} from 'react-router';
-import {Suspense} from 'react';
-import {Image} from '@shopify/hydrogen';
+import {Link, useLoaderData} from 'react-router';
+import {Image, Money} from '@shopify/hydrogen';
 import {ProductItem} from '~/components/ProductItem';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = () => {
-  return [{title: 'Hydrogen | Home'}];
+  return [{title: 'DantheHikingMan | Built to sell'}];
 };
 
 /**
  * @param {Route.LoaderArgs} args
+ * @returns {Promise<LoaderReturnData>}
  */
 export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
-  const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
-  const criticalData = await loadCriticalData(args);
-
-  return {...deferredData, ...criticalData};
-}
-
-/**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
- * @param {Route.LoaderArgs}
- */
-async function loadCriticalData({context}) {
-  const [{collections}] = await Promise.all([
-    context.storefront.query(FEATURED_COLLECTION_QUERY),
-    // Add other queries here, so that they are loaded in parallel
-  ]);
+  const {products} = await args.context.storefront.query(HOME_PRODUCTS_QUERY, {
+    cache: args.context.storefront.CacheLong(),
+  });
 
   return {
-    featuredCollection: collections.nodes[0],
-  };
-}
-
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {Route.LoaderArgs}
- */
-function loadDeferredData({context}) {
-  const recommendedProducts = context.storefront
-    .query(RECOMMENDED_PRODUCTS_QUERY)
-    .catch((error) => {
-      // Log query errors, but don't throw them so the page can still render
-      console.error(error);
-      return null;
-    });
-
-  return {
-    recommendedProducts,
+    featuredProducts: products.nodes,
   };
 }
 
 export default function Homepage() {
   /** @type {LoaderReturnData} */
   const data = useLoaderData();
-  return (
-    <div className="home">
-      <FeaturedCollection collection={data.featuredCollection} />
-      <RecommendedProducts products={data.recommendedProducts} />
-    </div>
-  );
-}
+  const featuredProducts = data.featuredProducts ?? [];
+  const heroProduct = featuredProducts[0];
 
-/**
- * @param {{
- *   collection: FeaturedCollectionFragment;
- * }}
- */
-function FeaturedCollection({collection}) {
-  if (!collection) return null;
-  const image = collection?.image;
   return (
-    <Link
-      className="featured-collection"
-      to={`/collections/${collection.handle}`}
-    >
-      {image && (
-        <div className="featured-collection-image">
-          <Image data={image} sizes="100vw" />
+    <div className="landing-page">
+      <section className="landing-hero">
+        <div className="landing-hero-copy">
+          <p className="landing-eyebrow">High-converting storefront</p>
+          <h1>Turn browsers into buyers with a clean, focused homepage.</h1>
+          <p className="landing-intro">
+            This landing page is built to do one job well: highlight the offer,
+            reduce friction, and push shoppers toward the products that matter
+            most.
+          </p>
+          <div className="landing-actions">
+            <Link className="landing-button landing-button--primary" to="/collections/all">
+              Shop products
+            </Link>
+            <Link className="landing-button landing-button--secondary" to="#featured-products">
+              See featured picks
+            </Link>
+          </div>
+          <ul className="landing-points" aria-label="Store highlights">
+            <li>Clear headline and call to action</li>
+            <li>Mobile-first, easy-to-scan layout</li>
+            <li>Built to showcase real products fast</li>
+          </ul>
         </div>
-      )}
-      <h1>{collection.title}</h1>
-    </Link>
-  );
-}
 
-/**
- * @param {{
- *   products: Promise<RecommendedProductsQuery | null>;
- * }}
- */
-function RecommendedProducts({products}) {
-  return (
-    <div className="recommended-products">
-      <h2>Recommended Products</h2>
-      <Suspense fallback={<div>Loading...</div>}>
-        <Await resolve={products}>
-          {(response) => (
-            <div className="recommended-products-grid">
-              {response
-                ? response.products.nodes.map((product) => (
-                    <ProductItem key={product.id} product={product} />
-                  ))
-                : null}
+        <div className="landing-hero-panel">
+          {heroProduct ? (
+            <Link className="landing-product-spotlight" to={`/products/${heroProduct.handle}`}>
+              <p className="landing-eyebrow">Featured product</p>
+              {heroProduct.featuredImage ? (
+                <div className="landing-product-spotlight-media">
+                  <Image
+                    alt={heroProduct.featuredImage.altText || heroProduct.title}
+                    aspectRatio="1/1"
+                    data={heroProduct.featuredImage}
+                    loading="eager"
+                    sizes="(min-width: 45em) 420px, 100vw"
+                  />
+                </div>
+              ) : null}
+              <div className="landing-product-spotlight-copy">
+                <h2>{heroProduct.title}</h2>
+                <p className="landing-product-spotlight-price">
+                  <Money data={heroProduct.priceRange.minVariantPrice} />
+                </p>
+                <span className="landing-button landing-button--primary">
+                  Shop this item
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="landing-stat-card">
+              <p>Best for</p>
+              <h2>One strong offer at a time</h2>
+              <p>
+                Perfect for a hero product, starter bundle, seasonal drop, or any
+                collection you want buyers to notice first.
+              </p>
             </div>
           )}
-        </Await>
-      </Suspense>
-      <br />
+          <div className="landing-stat-grid" aria-label="Sales benefits">
+            <div>
+              <strong>1</strong>
+              <span>primary message</span>
+            </div>
+            <div>
+              <strong>3</strong>
+              <span>benefits at a glance</span>
+            </div>
+            <div>
+              <strong>4</strong>
+              <span>featured products max</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-value-strip" aria-label="Why this works">
+        <article>
+          <h3>Sell the outcome</h3>
+          <p>Lead with the result people want, not a wall of menu links.</p>
+        </article>
+        <article>
+          <h3>Lower hesitation</h3>
+          <p>Use short sections, concise copy, and fewer clicks to reach checkout.</p>
+        </article>
+        <article>
+          <h3>Show the proof</h3>
+          <p>Make room for featured products, reviews, or a single strong bundle.</p>
+        </article>
+      </section>
+
+      <section className="landing-products" id="featured-products">
+        <div className="landing-section-heading">
+          <p className="landing-eyebrow">Featured products</p>
+          <h2>Start with the products you want to move first.</h2>
+        </div>
+
+        {featuredProducts.length ? (
+          <div className="products-grid landing-products-grid">
+            {featuredProducts.map((product) => (
+              <ProductItem key={product.id} product={product} loading="lazy" />
+            ))}
+          </div>
+        ) : (
+          <div className="landing-empty-state">
+            <h3>No products yet</h3>
+            <p>
+              Add products in Shopify, then come back here and the homepage will
+              showcase them automatically.
+            </p>
+            <Link className="landing-button landing-button--primary" to="/collections/all">
+              Browse the store
+            </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="landing-closeout">
+        <div>
+          <p className="landing-eyebrow">Next step</p>
+          <h2>Swap in your real offer and let the page do the selling.</h2>
+        </div>
+        <Link className="landing-button landing-button--primary" to="/collections/all">
+          Shop now
+        </Link>
+      </section>
     </div>
   );
 }
 
-const FEATURED_COLLECTION_QUERY = `#graphql
-  fragment FeaturedCollection on Collection {
-    id
-    title
-    image {
-      id
-      url
-      altText
-      width
-      height
-    }
-    handle
-  }
-  query FeaturedCollection($country: CountryCode, $language: LanguageCode)
-    @inContext(country: $country, language: $language) {
-    collections(first: 1, sortKey: UPDATED_AT, reverse: true) {
-      nodes {
-        ...FeaturedCollection
-      }
-    }
-  }
-`;
-
-const RECOMMENDED_PRODUCTS_QUERY = `#graphql
-  fragment RecommendedProduct on Product {
+const HOME_PRODUCTS_QUERY = `#graphql
+  fragment HomeProduct on Product {
     id
     title
     handle
@@ -162,17 +180,15 @@ const RECOMMENDED_PRODUCTS_QUERY = `#graphql
       height
     }
   }
-  query RecommendedProducts ($country: CountryCode, $language: LanguageCode)
-    @inContext(country: $country, language: $language) {
+  query HomeProducts {
     products(first: 4, sortKey: UPDATED_AT, reverse: true) {
       nodes {
-        ...RecommendedProduct
+        ...HomeProduct
       }
     }
   }
 `;
 
 /** @typedef {import('./+types/_index').Route} Route */
-/** @typedef {import('storefrontapi.generated').FeaturedCollectionFragment} FeaturedCollectionFragment */
-/** @typedef {import('storefrontapi.generated').RecommendedProductsQuery} RecommendedProductsQuery */
+/** @typedef {import('storefrontapi.generated').HomeProductFragment} HomeProductFragment */
 /** @typedef {import('@shopify/remix-oxygen').SerializeFrom<typeof loader>} LoaderReturnData */
