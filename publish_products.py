@@ -113,15 +113,31 @@ def update_variant_price(product_id, variant_id):
     return payload['productVariants'][0]
 
 
+def publish_to_current_channel(product_id):
+    query = (
+        'mutation PublishToCurrentChannel($id: ID!) '
+        '{ publishablePublishToCurrentChannel(id: $id) { '
+        'publishable { ... on Product { id title publishedAt } } '
+        'userErrors { field message } } }'
+    )
+    data = run_shopify(query, variables={'id': product_id}, allow_mutations=True)
+    payload = data['publishablePublishToCurrentChannel']
+    if payload['userErrors']:
+        raise RuntimeError(f'Publish error for {product_id}: {payload["userErrors"]}')
+    return payload['publishable']
+
+
 def main():
-    existing = run_shopify('query { products(first: 250) { nodes { handle } } }')['products']['nodes']
-    existing_handles = {node['handle'] for node in existing}
+    existing = run_shopify('query { products(first: 250) { nodes { handle id } } }')['products']['nodes']
+    existing_by_handle = {node['handle']: node['id'] for node in existing}
+    existing_handles = set(existing_by_handle)
     created = []
     skipped = []
 
     for index, product in enumerate(PRODUCTS, 1):
         if product['handle'] in existing_handles:
             print(f'skip {index}/15 {product["title"]} (exists)')
+            publish_to_current_channel(existing_by_handle[product['handle']])
             skipped.append(product['handle'])
             continue
         file_path = SRC / product['filename']
@@ -133,6 +149,7 @@ def main():
         variant = created_product['variants']['nodes'][0]
         sku = product['handle'].replace('-', '').upper()[:20]
         update_variant_price(created_product['id'], variant['id'])
+        publish_to_current_channel(created_product['id'])
         existing_handles.add(product['handle'])
         created.append({
             'title': product['title'],
